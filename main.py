@@ -23,6 +23,7 @@ class NTCWithWiFi:
         self.adc = machine.ADC(self.analog_pin)
         self.wifi_connected = False
         self.mqtt_connected = False
+        self.Temp_C = 0.0
 
     def connect_wifi(self):
         if not self.wifi_connected:
@@ -48,6 +49,7 @@ class NTCWithWiFi:
                 print(f"Failed to connect to MQTT: {e}")
 
     def read_ntc_sensor(self):
+        
         Vin = 3.3
         Ro = 10000  # 10k Resistor
         adc_resolution = 65535
@@ -70,8 +72,9 @@ class NTCWithWiFi:
 
         TempK = 1 / (A + (B * math.log(Rt)) + C * math.pow(math.log(Rt), 3))
         TempC = TempK - 273.15
+        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC
 
-        return round(TempC, 2)
+        return round(self.Temp_C, 2)
 
     def publish_temperature(self, temperature):
         if self.mqtt_connected:
