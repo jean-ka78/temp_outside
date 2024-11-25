@@ -6,8 +6,8 @@ from umqtt.simple import MQTTClient
 
 # Константи
 WIFI_TIMEOUT = 10  # Секунди для тайм-ауту Wi-Fi
-SLEEP_INTERVAL = 5  # Секунди між вимірюваннями
-CORRECTION_OFFSET = -3 - 0.45  # Поправка для температури
+SLEEP_INTERVAL = 1  # Секунди між вимірюваннями
+CORRECTION_OFFSET = -5 - 2.0  # Поправка для температури
 
 adc_count = 100
 raw = [0] * adc_count
@@ -76,7 +76,9 @@ class NTCWithWiFi:
         Rt = (Vin * Ro / Vout) - Ro
         TempK = 1 / (A + (B * math.log(Rt)) + C * math.pow(math.log(Rt), 3))
         TempC = TempK - 273.15
-        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC + CORRECTION_OFFSET
+        TempC = TempC + CORRECTION_OFFSET
+
+        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC 
 
         return round(self.Temp_C, 2)
 
