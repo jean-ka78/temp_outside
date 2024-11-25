@@ -2,8 +2,12 @@ import network
 import machine
 import math
 import time
-import ujson
 from umqtt.simple import MQTTClient
+
+# Константи
+WIFI_TIMEOUT = 10  # Секунди для тайм-ауту Wi-Fi
+SLEEP_INTERVAL = 5  # Секунди між вимірюваннями
+CORRECTION_OFFSET = -3 - 0.45  # Поправка для температури
 
 adc_count = 100
 raw = [0] * adc_count
@@ -32,7 +36,7 @@ class NTCWithWiFi:
             self.wlan.connect(self.ssid, self.password)
             start_time = time.time()
             while not self.wlan.isconnected():
-                if time.time() - start_time > 10:  # 10 seconds timeout
+                if time.time() - start_time > WIFI_TIMEOUT:
                     print("Failed to connect to Wi-Fi")
                     return
             print("Connected to Wi-Fi")
@@ -49,14 +53,12 @@ class NTCWithWiFi:
                 print(f"Failed to connect to MQTT: {e}")
 
     def read_ntc_sensor(self):
-        
         Vin = 3.3
-        Ro = 10000  # 10k Resistor
+        Ro = 10000  # 10k резистор
         adc_resolution = 65535
         A = 0.001129148
         B = 0.000234125
         C = 0.0000000876741
-        adc_value = 0
 
         for i in range(len(raw)):
             adc_value = self.adc.read_u16()
@@ -67,12 +69,14 @@ class NTCWithWiFi:
         middle = sum_list / len(raw)
 
         Vout = (middle * Vin) / adc_resolution
-        z = max(Vin - Vout, 1)
-        Rt = (Vin * Ro / Vout) - Ro
+        if Vout <= 0:
+            print("Error: Vout is zero or negative, skipping this measurement.")
+            return self.Temp_C  # Повертаємо останнє коректне значення
 
+        Rt = (Vin * Ro / Vout) - Ro
         TempK = 1 / (A + (B * math.log(Rt)) + C * math.pow(math.log(Rt), 3))
         TempC = TempK - 273.15
-        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC
+        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC + CORRECTION_OFFSET
 
         return round(self.Temp_C, 2)
 
@@ -91,20 +95,28 @@ class NTCWithWiFi:
             if self.wifi_connected and not self.mqtt_connected:
                 self.connect_mqtt()
 
+            # Перевірка на втрату підключення
+            if self.wifi_connected and not self.wlan.isconnected():
+                print("Wi-Fi connection lost. Reconnecting...")
+                self.wifi_connected = False
+
+            if self.mqtt_connected:
+                try:
+                    self.mqtt.ping()
+                except Exception as e:
+                    print(f"MQTT connection lost: {e}")
+                    self.mqtt_connected = False
+
+            # Читання і публікація температури
             temperature = self.read_ntc_sensor()
             print('Temp = ', temperature, '`C')
             self.publish_temperature(temperature)
 
-            if not self.wifi_connected:
-                print("Wi-Fi not connected. Running in offline mode.")
-            if not self.mqtt_connected:
-                print("MQTT not connected. Running in offline mode.")
-                
-            time.sleep(5)  # Adjust the sleep interval as needed
+            time.sleep(SLEEP_INTERVAL)  # Пауза між вимірюваннями
 
-# Example usage:
+# Приклад використання
 if __name__ == "__main__":
-    ssid = "aonline3g"
+    ssid = "aonline"
     password = "1qaz2wsx3edc"
     mqtt_server = "greenhouse.net.ua"
     mqtt_port = 1883
