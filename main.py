@@ -5,8 +5,8 @@ import time
 from umqtt.simple import MQTTClient
 
 # Константи
-WIFI_TIMEOUT = 10  # Секунди для тайм-ауту Wi-Fi
-SLEEP_INTERVAL = 5  # Секунди між вимірюваннями
+WIFI_TIMEOUT = 20  # Секунди для тайм-ауту Wi-Fi
+SLEEP_INTERVAL = 10  # Секунди між вимірюваннями
 CORRECTION_OFFSET = -3 - 2.0  # Поправка для температури
 
 adc_count = 100
@@ -111,7 +111,7 @@ class NTCWithWiFi:
 
             # Читання і публікація температури
             temperature = self.read_ntc_sensor()
-            print('Temp = ', temperature, '`C')
+            print('Temp = ', temperature, 'C')
             self.publish_temperature(temperature)
 
             time.sleep(SLEEP_INTERVAL)  # Пауза між вимірюваннями
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     mqtt_server = "greenhouse.net.ua"
     mqtt_port = 1883
     mqtt_topic = "home/pico/current_temperature"
-    mqtt_user = "test"
+    mqtt_user = "sensor_out"
     mqtt_u_pass = "qwerty"
     analog_pin = 26
 
