@@ -6,8 +6,8 @@ from umqtt.simple import MQTTClient
 
 # Константи
 WIFI_TIMEOUT = 10  # Секунди для тайм-ауту Wi-Fi
-SLEEP_INTERVAL = 1  # Секунди між вимірюваннями
-CORRECTION_OFFSET = -5 - 2.0  # Поправка для температури
+SLEEP_INTERVAL = 5  # Секунди між вимірюваннями
+CORRECTION_OFFSET = -3 - 2.0  # Поправка для температури
 
 adc_count = 100
 raw = [0] * adc_count
