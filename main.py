@@ -5,12 +5,10 @@ import time
 from umqtt.simple import MQTTClient
 
 # Константи
-WIFI_TIMEOUT = 20  # Секунди для тайм-ауту Wi-Fi
-SLEEP_INTERVAL = 10  # Секунди між вимірюваннями
-CORRECTION_OFFSET = -3 - 2.0  # Поправка для температури
-
-adc_count = 100
-raw = [0] * adc_count
+WIFI_TIMEOUT = 20
+SLEEP_INTERVAL = 2000  # мс
+CORRECTION_OFFSET = -5.0
+adc_count = 20
 
 class NTCWithWiFi:
     def __init__(self, ssid, password, mqtt_server, mqtt_port, mqtt_topic, mqtt_user, mqtt_u_pass, analog_pin):
@@ -28,6 +26,7 @@ class NTCWithWiFi:
         self.wifi_connected = False
         self.mqtt_connected = False
         self.Temp_C = 0.0
+        self.timer = machine.Timer()
 
     def connect_wifi(self):
         if not self.wifi_connected:
@@ -37,9 +36,9 @@ class NTCWithWiFi:
             start_time = time.time()
             while not self.wlan.isconnected():
                 if time.time() - start_time > WIFI_TIMEOUT:
-                    print("Failed to connect to Wi-Fi")
+                    print("Wi-Fi connection timeout.")
                     return
-            print("Connected to Wi-Fi")
+            print("Connected to Wi-Fi.")
             self.wifi_connected = True
 
     def connect_mqtt(self):
@@ -47,38 +46,34 @@ class NTCWithWiFi:
             print("Connecting to MQTT...")
             try:
                 self.mqtt.connect()
-                print("Connected to MQTT")
+                print("Connected to MQTT.")
                 self.mqtt_connected = True
             except Exception as e:
-                print(f"Failed to connect to MQTT: {e}")
+                print(f"MQTT connection failed: {e}")
 
     def read_ntc_sensor(self):
         Vin = 3.3
-        Ro = 10000  # 10k резистор
+        Ro = 10000
         adc_resolution = 65535
         A = 0.001129148
         B = 0.000234125
         C = 0.0000000876741
 
-        for i in range(len(raw)):
-            adc_value = self.adc.read_u16()
-            raw[i] = adc_value
+        total = 0
+        for _ in range(adc_count):
+            total += self.adc.read_u16()
+        average = total / adc_count
 
-        raw.sort()
-        sum_list = sum(raw)
-        middle = sum_list / len(raw)
-
-        Vout = (middle * Vin) / adc_resolution
+        Vout = (average * Vin) / adc_resolution
         if Vout <= 0:
-            print("Error: Vout is zero or negative, skipping this measurement.")
-            return self.Temp_C  # Повертаємо останнє коректне значення
+            print("Invalid Vout.")
+            return self.Temp_C
 
         Rt = (Vin * Ro / Vout) - Ro
-        TempK = 1 / (A + (B * math.log(Rt)) + C * math.pow(math.log(Rt), 3))
-        TempC = TempK - 273.15
-        TempC = TempC + CORRECTION_OFFSET
-
-        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC 
+        logRt = math.log(Rt)
+        TempK = 1 / (A + B * logRt + C * logRt**3)
+        TempC = TempK - 273.15 + CORRECTION_OFFSET
+        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC
 
         return round(self.Temp_C, 2)
 
@@ -87,34 +82,28 @@ class NTCWithWiFi:
             try:
                 self.mqtt.publish(self.mqtt_topic, str(temperature))
             except Exception as e:
-                print(f"Failed to publish temperature: {e}")
-                self.mqtt_connected = False  # Mark MQTT as disconnected
+                print(f"Publish failed: {e}")
+                self.mqtt_connected = False
+
+    def measure_and_publish(self, timer):
+        # Wi-Fi перевірка
+        if not self.wifi_connected:
+            self.connect_wifi()
+        if self.wifi_connected and not self.wlan.isconnected():
+            print("Wi-Fi disconnected.")
+            self.wifi_connected = False
+
+        # MQTT повторне підключення
+        if self.wifi_connected and not self.mqtt_connected:
+            self.connect_mqtt()
+
+        temperature = self.read_ntc_sensor()
+        print('Temp =', temperature, 'C')
+        self.publish_temperature(temperature)
 
     def run(self):
-        while True:
-            if not self.wifi_connected:
-                self.connect_wifi()
-            if self.wifi_connected and not self.mqtt_connected:
-                self.connect_mqtt()
-
-            # Перевірка на втрату підключення
-            if self.wifi_connected and not self.wlan.isconnected():
-                print("Wi-Fi connection lost. Reconnecting...")
-                self.wifi_connected = False
-
-            if self.mqtt_connected:
-                try:
-                    self.mqtt.ping()
-                except Exception as e:
-                    print(f"MQTT connection lost: {e}")
-                    self.mqtt_connected = False
-
-            # Читання і публікація температури
-            temperature = self.read_ntc_sensor()
-            print('Temp = ', temperature, 'C')
-            self.publish_temperature(temperature)
-
-            time.sleep(SLEEP_INTERVAL)  # Пауза між вимірюваннями
+        print("Starting periodic measurement every", SLEEP_INTERVAL // 1000, "seconds.")
+        self.timer.init(period=SLEEP_INTERVAL, mode=machine.Timer.PERIODIC, callback=self.measure_and_publish)
 
 # Приклад використання
 if __name__ == "__main__":
@@ -123,9 +112,12 @@ if __name__ == "__main__":
     mqtt_server = "greenhouse.net.ua"
     mqtt_port = 1883
     mqtt_topic = "home/pico/current_temperature"
-    mqtt_user = "sensor_out"
+    mqtt_user = "mqtt"
     mqtt_u_pass = "qwerty"
     analog_pin = 26
 
-    ntc_w = NTCWithWiFi(ssid, password, mqtt_server, mqtt_port, mqtt_topic, mqtt_user, mqtt_u_pass, analog_pin)
-    ntc_w.run()
+    ntc = NTCWithWiFi(ssid, password, mqtt_server, mqtt_port, mqtt_topic, mqtt_user, mqtt_u_pass, analog_pin)
+    ntc.run()
+
+    while True:
+        time.sleep(1)
