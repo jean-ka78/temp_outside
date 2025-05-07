@@ -7,7 +7,7 @@ from umqtt.simple import MQTTClient
 # Константи
 WIFI_TIMEOUT = 20
 SLEEP_INTERVAL = 2000  # мс
-CORRECTION_OFFSET = -5.0
+CORRECTION_OFFSET = -3.0
 adc_count = 20
 
 class NTCWithWiFi:
