@@ -8,7 +8,7 @@ from umqtt.simple import MQTTClient
 WIFI_TIMEOUT = 20
 SLEEP_INTERVAL = 10000  # мс
 CORRECTION_OFFSET = 0.0
-adc_count = 20
+adc_count = 100  # Більше вибірок для зменшення шуму
 
 class NTCWithWiFi:
     def __init__(self, ssid, password, mqtt_server, mqtt_port, mqtt_topic, mqtt_user, mqtt_u_pass, analog_pin):
@@ -26,6 +26,8 @@ class NTCWithWiFi:
         self.wifi_connected = False
         self.mqtt_connected = False
         self.Temp_C = 0.0
+        self.recent_temps = []
+        self.max_temps = 10  # розмір вікна згладжування
         self.timer = machine.Timer()
 
     def connect_wifi(self):
@@ -73,7 +75,12 @@ class NTCWithWiFi:
         logRt = math.log(Rt)
         TempK = 1 / (A + B * logRt + C * logRt**3)
         TempC = TempK - 273.15 + CORRECTION_OFFSET
-        self.Temp_C = 0.9 * self.Temp_C + 0.1 * TempC
+
+        # Ковзне середнє
+        self.recent_temps.append(TempC)
+        if len(self.recent_temps) > self.max_temps:
+            self.recent_temps.pop(0)
+        self.Temp_C = sum(self.recent_temps) / len(self.recent_temps)
 
         return round(self.Temp_C, 2)
 
