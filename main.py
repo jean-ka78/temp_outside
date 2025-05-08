@@ -6,8 +6,8 @@ from umqtt.simple import MQTTClient
 
 # Константи
 WIFI_TIMEOUT = 20
-SLEEP_INTERVAL = 2000  # мс
-CORRECTION_OFFSET = -3.0
+SLEEP_INTERVAL = 10000  # мс
+CORRECTION_OFFSET = 0.0
 adc_count = 20
 
 class NTCWithWiFi:
@@ -53,7 +53,7 @@ class NTCWithWiFi:
 
     def read_ntc_sensor(self):
         Vin = 3.3
-        Ro = 10000
+        Ro = 11350
         adc_resolution = 65535
         A = 0.001129148
         B = 0.000234125
